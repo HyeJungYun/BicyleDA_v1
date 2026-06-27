@@ -28,7 +28,8 @@ analysis = st.sidebar.radio(
     "분석 유형",
     ["이용량 (어디서 많이 타나)",
      "불균형 (어디가 부족/과잉)",
-     "이동흐름 OD (어디로 가나)"]
+     "이동흐름 OD (어디로 가나)",
+     "📊 1일차 분석 (차트)"]
 )
 
 # ── 핵심 지표
@@ -68,6 +69,31 @@ elif analysis.startswith("불균형"):
     st_folium(m, width=900, height=500)
     st.dataframe(view[["자치구","대여소명","대여건수","반납건수","순유출"]]
                  .reset_index(drop=True), use_container_width=True)
+
+# ── 4) 1일차 분석 (folium 미사용 = Streamlit 내장 차트)
+elif "1일차" in analysis:
+    st.subheader("📊 1일차 분석 — 어디서 많이 / 어디가 불균형 / 언제 많이?")
+    if "자치구" in df.columns:
+        st.markdown("**① 자치구별 총 이용량**")
+        gu = df.groupby("자치구")["총이용건수"].sum().sort_values(ascending=False)
+        st.bar_chart(gu)
+    st.markdown("**② 이용량 TOP 20 대여소**")
+    top20 = df.nlargest(20, "총이용건수").set_index("대여소명")["총이용건수"]
+    st.bar_chart(top20)
+    ca, cb = st.columns(2)
+    with ca:
+        st.markdown("**③ 자전거 부족 TOP 15 (대여>반납)**")
+        st.bar_chart(df.nlargest(15, "순유출").set_index("대여소명")["순유출"])
+    with cb:
+        st.markdown("**④ 자전거 과잉 TOP 15 (반납>대여)**")
+        st.bar_chart(df.nsmallest(15, "순유출").set_index("대여소명")["순유출"].abs())
+    st.markdown("**⑤ 월별 이용 추세 (2025)**")
+    try:
+        mon = load_od("monthly.csv")
+        ymc = [c for c in mon.columns if "년월" in c or "월" in c][0]
+        st.line_chart(mon.set_index(ymc)[["대여건수", "반납건수", "총이용건수"]])
+    except Exception:
+        st.info("monthly.csv가 없어 월별 추세는 생략됩니다. (코랩의 'monthly.csv 만들기' 셀 실행 후 함께 업로드)")
 
 # ── 3) 이동흐름 OD
 else:
