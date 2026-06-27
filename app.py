@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import folium
-from folium.plugins import HeatMap
+from folium.plugins import HeatMap, PolyLineTextPath, AntPath
 from streamlit_folium import st_folium
 
 st.set_page_config(page_title="따릉이 분석 대시보드", layout="wide")
@@ -72,19 +72,24 @@ elif analysis.startswith("불균형"):
 # ── 3) 이동흐름 OD
 else:
     when = st.sidebar.radio("시간대", ["출근 (7~9시)", "퇴근 (17~19시)"])
+    dirstyle = st.sidebar.radio("방향 표시", ["화살표 ➤", "흐름(애니메이션)"])
     od = load_od("od_am.csv") if when.startswith("출근") else load_od("od_pm.csv")
     od = od.dropna(subset=["출발위도","도착위도"])
     max_trip = od["이동횟수"].max() if len(od) else 1
     for _, r in od.iterrows():
         w = 1 + (r["이동횟수"]/max_trip)*8
-        folium.PolyLine([[r["출발위도"],r["출발경도"]],[r["도착위도"],r["도착경도"]]],
-            color="crimson", weight=w, opacity=0.6,
-            popup=f"{r['출발명']} → {r['도착명']}<br>{int(r['이동횟수'])}회").add_to(m)
-        folium.CircleMarker([r["출발위도"],r["출발경도"]], radius=4,
-            color="steelblue", fill=True, fill_opacity=0.8).add_to(m)
-        folium.CircleMarker([r["도착위도"],r["도착경도"]], radius=4,
-            color="crimson", fill=True, fill_opacity=0.8).add_to(m)
-    st.subheader(f"📍 {when} 핵심 OD 구간 — 굵을수록 통행↑ (자전거도로 우선검토)")
+        coords = [[r["출발위도"],r["출발경도"]],[r["도착위도"],r["도착경도"]]]
+        popup = f"{r['출발명']} → {r['도착명']}<br>{int(r['이동횟수'])}회"
+        if dirstyle.startswith("화살표"):
+            line = folium.PolyLine(coords, color="crimson", weight=w, opacity=0.6, popup=popup).add_to(m)
+            PolyLineTextPath(line, "  ➤  ", repeat=True, offset=4,
+                attributes={"fill":"#b3001b","font-weight":"bold","font-size":"14"}).add_to(m)
+        else:
+            AntPath(coords, color="crimson", weight=w, opacity=0.7, delay=800,
+                    dash_array=[10,20], popup=popup).add_to(m)
+        folium.CircleMarker(coords[0], radius=4, color="#1f6feb", fill=True, fill_opacity=0.9).add_to(m)
+        folium.CircleMarker(coords[1], radius=4, color="crimson", fill=True, fill_opacity=0.9).add_to(m)
+    st.subheader(f"📍 {when} 핵심 OD 구간 — ➤ 출발→도착 방향 (굵을수록 통행↑)")
     st_folium(m, width=900, height=500)
     od_show = load_od("od_am.csv" if when.startswith("출근") else "od_pm.csv")
     od_show = od_show[["출발명","도착명","이동횟수"]].reset_index(drop=True)
