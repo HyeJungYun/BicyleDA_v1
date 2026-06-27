@@ -4,9 +4,9 @@ import folium
 from folium.plugins import HeatMap, PolyLineTextPath, AntPath
 from streamlit_folium import st_folium
 
-st.set_page_config(page_title="따릉이 분석 대시보드", layout="wide")
-st.title("🚲 따릉이 대여소 분석 대시보드")
-st.caption("서울시 공공자전거 데이터로 보는 우리 동네")
+st.set_page_config(page_title="지역을 바꾸는 데이터 읽기", layout="wide")
+st.title("🚲 지역을 바꾸는 데이터 읽기")
+st.caption("— 서울 따릉이로 보는 우리 동네")
 
 @st.cache_data
 def load_main():
@@ -23,13 +23,13 @@ def load_od(name):
 df = load_main()
 
 # ── 사이드바
-st.sidebar.header("⚙️ 분석 설정")
+st.sidebar.header("🚲 따릉이 분석")
 analysis = st.sidebar.radio(
-    "분석 유형",
-    ["이용량 (어디서 많이 타나)",
-     "불균형 (어디가 부족/과잉)",
-     "이동흐름 OD (어디로 가나)",
-     "📊 1일차 분석 (차트)"]
+    "분석 항목",
+    ["이용 현황 요약",
+     "이용량 분포",
+     "수급 불균형",
+     "이동 흐름 (OD)"]
 )
 
 # ── 핵심 지표
@@ -43,19 +43,20 @@ center = [df["위도"].mean(), df["경도"].mean()]
 m = folium.Map(location=center, zoom_start=11, tiles="CartoDB positron")
 
 # ── 1) 이용량
-if analysis.startswith("이용량"):
+if "이용량" in analysis:
     top_n = st.sidebar.slider("표시할 대여소 수", 50, len(df), 300)
     view = df.nlargest(top_n, "총이용건수")
     heat = [[r["위도"], r["경도"], r["총이용건수"]] for _, r in view.iterrows()]
     HeatMap(heat, radius=18, blur=14, min_opacity=0.3,
             gradient={0.2:"blue",0.5:"cyan",0.7:"yellow",1.0:"red"}).add_to(m)
-    st.subheader("📍 이용량 히트맵 — 제일 많이 빌려가는 동네는?")
+    st.subheader("🔥 이용량 분포")
+    st.caption("어느 동네가 따릉이를 가장 많이 이용하나")
     st_folium(m, width=900, height=500)
     st.dataframe(view[["자치구","대여소명","대여건수","반납건수","총이용건수"]]
                  .reset_index(drop=True), use_container_width=True)
 
 # ── 2) 불균형
-elif analysis.startswith("불균형"):
+elif "불균형" in analysis:
     top_n = st.sidebar.slider("표시할 대여소 수", 50, len(df), 300)
     view = df.nlargest(top_n, "총이용건수")
     max_imb = df["순유출"].abs().max()
@@ -65,14 +66,16 @@ elif analysis.startswith("불균형"):
         folium.CircleMarker([r["위도"], r["경도"]], radius=radius,
             color=color, fill=True, fill_color=color, fill_opacity=0.5,
             popup=f"순유출: {r['순유출']:.0f}").add_to(m)
-    st.subheader("📍 불균형 지도 — 🔴부족(대여>반납) / 🔵과잉(반납>대여)")
+    st.subheader("⚖️ 수급 불균형")
+    st.caption("🔴 부족(대여>반납) · 🔵 과잉(반납>대여) → 재배치가 필요한 곳")
     st_folium(m, width=900, height=500)
     st.dataframe(view[["자치구","대여소명","대여건수","반납건수","순유출"]]
                  .reset_index(drop=True), use_container_width=True)
 
 # ── 4) 1일차 분석 (folium 미사용 = Streamlit 내장 차트)
-elif "1일차" in analysis:
-    st.subheader("📊 1일차 분석 — 어디서 많이 / 어디가 불균형 / 언제 많이?")
+elif "요약" in analysis:
+    st.subheader("📊 이용 현황 요약")
+    st.caption("어디서 많이 · 어디가 불균형 · 언제 많이 타는지 한눈에")
     if "자치구" in df.columns:
         st.markdown("**① 자치구별 총 이용량**")
         gu = df.groupby("자치구")["총이용건수"].sum().sort_values(ascending=False)
@@ -115,11 +118,12 @@ else:
                     dash_array=[10,20], popup=popup).add_to(m)
         folium.CircleMarker(coords[0], radius=4, color="#1f6feb", fill=True, fill_opacity=0.9).add_to(m)
         folium.CircleMarker(coords[1], radius=4, color="crimson", fill=True, fill_opacity=0.9).add_to(m)
-    st.subheader(f"📍 {when} 핵심 OD 구간 — ➤ 출발→도착 방향 (굵을수록 통행↑)")
+    st.subheader(f"🔀 이동 흐름 (OD) · {when}")
+    st.caption("➤ 출발→도착 · 선이 굵을수록 통행량 많음 → 자전거도로 우선검토")
     st_folium(m, width=900, height=500)
     od_show = load_od("od_am.csv" if when.startswith("출근") else "od_pm.csv")
     od_show = od_show[["출발명","도착명","이동횟수"]].reset_index(drop=True)
     od_show.index = od_show.index + 1
     st.dataframe(od_show, use_container_width=True)
 
-st.caption("데이터: 서울시 공공자전거 따릉이 | 데이터로 읽는 우리 동네")
+st.caption("데이터: 서울시 공공자전거 따릉이 · 지역을 바꾸는 데이터 읽기 (한겨레 × 숲과나눔)")
